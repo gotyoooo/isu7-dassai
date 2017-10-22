@@ -420,7 +420,7 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     $users = [];
     if (!empty($user_ids))
     {
-        $stmt = $dbh->prepare('SELECT name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
+        $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
         $stmt->execute([]);
         $user_rows = $stmt->fetchall();
         foreach ($user_rows as $urows) {
