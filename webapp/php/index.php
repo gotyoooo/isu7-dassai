@@ -550,8 +550,11 @@ $app->post('/profile', function (Request $request, Response $response) {
         // $redis->set("img_" . $avatarName, $avatarData);
         // $redis->set("img_time_". $avatarName, time());
 
-        file_put_contents('../public/icons/'.$avatarName,$avatarData);
-
+        $file = '../public/icons/'.$avatarName;
+        if (!file_exists($file)) {
+          file_put_contents('../public/icons/'.$avatarName,$avatarData);
+        }
+      
         $stmt = $pdo->prepare("UPDATE user SET avatar_icon = ? WHERE id = ?");
         $stmt->execute([$avatarName, $userId]);
     }
