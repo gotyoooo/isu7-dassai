@@ -356,7 +356,7 @@ $app->get('/message', function (Request $request, Response $response) {
         $r['date'] = str_replace('-', '/', $data[2]);
         $r['content'] = $data[1];
         $res[] = $r;
-        $maxMessageId = $(int)$score;
+        $maxMessageId = (int)$score;
     }
 
     /**
