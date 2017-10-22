@@ -202,25 +202,14 @@ $app->get('/', function (Request $request, Response $response) {
 
 function get_channel_list_info($focusedChannelId = null)
 {
-    if ($focusedChannelId === null)
-    {
-        $columns = 'id, name';
-    }
-    else
-    {
-        $columns = 'id, name, description';
-    }
-    $stmt = getPDO()->query('SELECT '.$columns.' FROM channel ORDER BY id');
+    $stmt = getPDO()->query("SELECT * FROM channel ORDER BY id");
     $channels = $stmt->fetchall();
     $description = "";
 
-    if ($focusedChannelId !== null)
-    {
-        foreach ($channels as $channel) {
-            if ((int)$channel['id'] === (int)$focusedChannelId) {
-                $description = $channel['description'];
-                break;
-            }
+    foreach ($channels as $channel) {
+        if ((int)$channel['id'] === (int)$focusedChannelId) {
+            $description = $channel['description'];
+            break;
         }
     }
     return [$channels, $description];
@@ -269,7 +258,7 @@ $app->get('/login', function (Request $request, Response $response) {
 $app->post('/login', function (Request $request, Response $response) {
     $name = $request->getParam('name');
     $password = $request->getParam('password');
-    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ? LIMIT 1");
+    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ?");
     $stmt->execute([$name]);
     $user = $stmt->fetch();
     if (!$user || $user['password'] !== sha1(utf8_encode($user['salt'] . $password))) {
@@ -306,36 +295,29 @@ $app->get('/message', function (Request $request, Response $response) {
     $lastMessageId = $request->getParam('last_message_id');
     $dbh = getPDO();
     $stmt = $dbh->prepare(
-        "SELECT id, user_id, content, created_at ".
+        "SELECT * ".
         "FROM message ".
         "WHERE id > ? AND channel_id = ? ORDER BY id DESC LIMIT 100"
     );
     $stmt->execute([$lastMessageId, $channelId]);
     $rows = $stmt->fetchall();
     $res = [];
-    $user_ids = [];
-    foreach ($rows as $row) {
-        $user_ids[] = $row['user_id'];
-    }
-    $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN (?)');
-    $stmt->execute([implode(',', $user_ids)]);
-    $user_rows = $stmt->fetchall();
-    $users = [];
-    foreach ($user_rows as $urows) {
-        $users[$urows['id']] = $urows;
-    }
-    $maxMessageId = 0;
     foreach ($rows as $row) {
         $r = [];
         $r['id'] = (int)$row['id'];
-        $r['user'] = isset($users[$row['user_id']])? $users[$row['user_id']] : null;
+        $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
+        $stmt->execute([$row['user_id']]);
+        $r['user'] = $stmt->fetch();
         $r['date'] = str_replace('-', '/', $row['created_at']);
         $r['content'] = $row['content'];
         $res[] = $r;
-        $maxMessageId = max($maxMessageId, $row['id']);
     }
     $res = array_reverse($res);
 
+    $maxMessageId = 0;
+    foreach ($rows as $row) {
+        $maxMessageId = max($maxMessageId, $row['id']);
+    }
     $stmt = $dbh->prepare(
         "INSERT INTO haveread (user_id, channel_id, message_id, updated_at, created_at) ".
         "VALUES (?, ?, ?, NOW(), NOW()) ".
@@ -457,7 +439,7 @@ $app->get('/profile/{user_name}', function (Request $request, Response $response
     $userName = $request->getAttribute('user_name');
     list($channels, $_) = get_channel_list_info();
 
-    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ? LIMIT 1");
+    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ?");
     $stmt->execute([$userName]);
     $user = $stmt->fetch();
     if (!$user) {
@@ -545,9 +527,12 @@ $app->post('/profile', function (Request $request, Response $response) {
         // $stmt->bindParam(1, $avatarName);
         // $stmt->bindParam(2, $avatarData, PDO::PARAM_LOB);
         // $stmt->execute();
-        $redis = getRedisCli();
-        $redis->set("img_" . $avatarName, $avatarData);
-        $redis->set("img_time_". $avatarName, time());
+
+        // $redis = getRedisCli();
+        // $redis->set("img_" . $avatarName, $avatarData);
+        // $redis->set("img_time_". $avatarName, time());
+
+        file_put_contents('../public/icons/'.$avatarName,$avatarData);
 
         $stmt = $pdo->prepare("UPDATE user SET avatar_icon = ? WHERE id = ?");
         $stmt->execute([$avatarName, $userId]);
