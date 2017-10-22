@@ -73,6 +73,7 @@ $container['view'] = function ($container) {
 
 $app->get('/initialize', function (Request $request, Response $response) {
 
+    $redis = getRedisCli();
     // image del
     // $redis = getRedisCli();
     // $stmt = $dbh->prepare("SELECT name FROM image WHERE id > 1001");
