@@ -255,7 +255,7 @@ $app->post('/login', function (Request $request, Response $response) {
     // if ($user_pass !== sha1(utf8_encode($user_salt . $password))) {
         return $response->withStatus(403);
     }
-    $response = FigResponseCookies::set($response, SetCookie::create('user_id', $user['id']);
+    $response = FigResponseCookies::set($response, SetCookie::create('user_id', $user['id']));
     // $response = FigResponseCookies::set($response, SetCookie::create('user_id', $redis->get("user_id_". $name)));
     return $response->withRedirect('/', 303);
 });
