@@ -104,7 +104,7 @@ $app->get('/initialize', function (Request $request, Response $response) {
     $stmt->execute();
     while ($row = $stmt->fetch()) {
       $redis->set("user_pass_". $row['name'], $row['password']);
-      $redis->set("user_salt_". $row['name'], $row['salt'];
+      $redis->set("user_salt_". $row['name'], $row['salt']);
     }
     $response->withStatus(204);
 });
