@@ -381,6 +381,7 @@ $app->get('/message', function (Request $request, Response $response) {
      */
     $res = array_reverse($res);
 
+    $dbh = getPDO();
     $stmt = $dbh->prepare(
         "INSERT INTO haveread (user_id, channel_id, message_id, updated_at, created_at) ".
         "VALUES (?, ?, ?, NOW(), NOW()) ".
