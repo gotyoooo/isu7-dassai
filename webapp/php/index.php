@@ -337,7 +337,7 @@ $app->get('/message', function (Request $request, Response $response) {
     $res = [];
     $redis = getRedisCli();
     $key = "message:".$channelId;
-    $result = $redis->zrange($key, 0, 100, ['withscores' => true]);
+    $result = $redis->zrange($key, 0, 99, ['withscores' => true]);
     $maxMessageId = 0;
     foreach($result as $val => $score)
     {
