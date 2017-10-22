@@ -336,7 +336,7 @@ $app->get('/message', function (Request $request, Response $response) {
     $res = [];
     $redis = getRedisCli();
     $key = "message:".$channelId;
-    $result = $redis->zrange($key, 0, 100, ['withscore' => true]);
+    $result = $redis->zrange($key, 0, 100, ['withscores' => true]);
     foreach($redult as $val => $score)
     {
         if($score <= $lastMessageId)
@@ -488,7 +488,7 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     // $stmt->execute([$channelId]);
     // $rows = $stmt->fetchall();
 
-    $result = $redis->zrange($key, ($page*20)-21, ($page*20)-1, ['withscore' => true]);
+    $result = $redis->zrange($key, ($page*20)-21, ($page*20)-1, ['withscores' => true]);
 
     $user_ids = [];
     $users = [];
