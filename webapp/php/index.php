@@ -127,6 +127,14 @@ $app->get('/initialize', function (Request $request, Response $response) {
     //   $redis->set("img_". $row['name'], $row['data']);
     //   $redis->set("img_time_". $row['name'], time());
     // }
+
+    $stmt = $dbh->prepare("SELECT id, name, salt, password FROM user");
+    $stmt->execute();
+    while ($row = $stmt->fetch()) {
+      $redis->set("user_id_". $row['name'], $row['id']);
+      $redis->set("user_pass_". $row['name'], $row['password']);
+      $redis->set("user_salt_". $row['name'], $row['salt']);
+    }
     $response->withStatus(204);
 });
 
@@ -186,12 +194,21 @@ function register($dbh, $userName, $password)
 {
     $salt = random_string(20);
     $passDigest = sha1(utf8_encode($salt . $password));
+    //
+    // $redis = getRedisCli();
+    // $redis->set("user_pass_". $userName, $passDigest);
+    // $redis->set("user_salt_". $userName, $salt);
+
     $stmt = $dbh->prepare(
         "INSERT INTO user (name, salt, password, display_name, avatar_icon, created_at) ".
         "VALUES (?, ?, ?, ?, 'default.png', NOW())"
     );
     $stmt->execute([$userName, $salt, $passDigest, $userName]);
     $stmt = $dbh->query("SELECT LAST_INSERT_ID() AS last_insert_id");
+    //
+    // $userId = $stmt->fetch()['last_insert_id'];
+    // $redis->set("user_id_". $userName, $userId);
+    // return $userId;
     return $stmt->fetch()['last_insert_id'];
 }
 
@@ -238,6 +255,7 @@ $app->get('/register', function (Request $request, Response $response) {
 $app->post('/register', function (Request $request, Response $response) {
     $name     = $request->getParam('name');
     $password = $request->getParam('password');
+
     if (!$name || !$password) {
         return $response->withStatus(400);
     }
@@ -260,13 +278,20 @@ $app->get('/login', function (Request $request, Response $response) {
 $app->post('/login', function (Request $request, Response $response) {
     $name = $request->getParam('name');
     $password = $request->getParam('password');
+
+    // $redis = getRedisCli();
+    // $user_pass = $redis->get("user_pass_". $name);
+    // $user_salt = $redis->get("user_salt_". $name);
+
     $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ?");
     $stmt->execute([$name]);
     $user = $stmt->fetch();
     if (!$user || $user['password'] !== sha1(utf8_encode($user['salt'] . $password))) {
+    // if ($user_pass !== sha1(utf8_encode($user_salt . $password))) {
         return $response->withStatus(403);
     }
     $response = FigResponseCookies::set($response, SetCookie::create('user_id', $user['id']));
+    // $response = FigResponseCookies::set($response, SetCookie::create('user_id', $redis->get("user_id_". $name)));
     return $response->withRedirect('/', 303);
 });
 
@@ -362,7 +387,7 @@ $app->get('/fetch', function (Request $request, Response $response) {
         return $response->withStatus(403);
     }
 
-    sleep(1);
+    // sleep(1);
 
     $dbh = getPDO();
     $stmt = $dbh->query('SELECT id FROM channel');
