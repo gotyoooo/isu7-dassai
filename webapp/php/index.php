@@ -354,7 +354,7 @@ $app->get('/message', function (Request $request, Response $response) {
         $stmt->execute([$data['user']]);
         $r['user'] = $stmt->fetch();
         // $r['date'] = str_replace('-', '/', $data[2]);
-        $r['date'] = date('Y-m-d H:i:s', $data['timestamp']);
+        $r['date'] = date('Y/m/d H:i:s', $data['timestamp']);
         $r['content'] = $data['content'];
         $res[] = $r;
         $maxMessageId = (int)$score;
@@ -529,7 +529,7 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
         $r['id'] = (int)$row['id'];
         $r['user'] = isset($users[$row['user_id']])? $users[$row['user_id']] : false;
         // $r['date'] = str_replace('-', '/', $row['created_at']);
-        $r['date'] = date('Y-m-d H:i:s', $row['created_at']);
+        $r['date'] = date('Y/m/d H:i:s', $row['created_at']);
         $r['content'] = $row['content'];
         $messages[] = $r;
     }
