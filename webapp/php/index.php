@@ -162,14 +162,17 @@ function register($dbh, $userName, $password)
     $redis = getRedisCli();
     $redis->set("user_pass_". $userName, $passDigest);
     $redis->set("user_salt_". $userName, $salt);
-    
+
     $stmt = $dbh->prepare(
         "INSERT INTO user (name, salt, password, display_name, avatar_icon, created_at) ".
         "VALUES (?, ?, ?, ?, 'default.png', NOW())"
     );
     $stmt->execute([$userName, $salt, $passDigest, $userName]);
     $stmt = $dbh->query("SELECT LAST_INSERT_ID() AS last_insert_id");
-    return $stmt->fetch()['last_insert_id'];
+
+    $userId = $stmt->fetch()['last_insert_id'];
+    $redis->set("user_id_". $userName, $userId);
+    return $userId;
 }
 
 $app->get('/', function (Request $request, Response $response) {
@@ -250,7 +253,7 @@ $app->post('/login', function (Request $request, Response $response) {
     if ($user_pass !== sha1(utf8_encode($user_salt . $password))) {
         return $response->withStatus(403);
     }
-    $response = FigResponseCookies::set($response, SetCookie::create('user_id', $user['id']));
+    $response = FigResponseCookies::set($response, SetCookie::create('user_id', $redis->get("user_id_". $name)));
     return $response->withRedirect('/', 303);
 });
 
