@@ -58,7 +58,7 @@ function getRedisCli()
 function makeMessage($redis, $channelId, $timestamp, $userId, $content)
 {
     $key = 'message:'. $channelId;
-    $score = $redis->zcard($key);
+    $score = ($redis->zcard($key));
     $redis->zadd(
         $key,
         $score,
@@ -307,14 +307,16 @@ $app->get('/message', function (Request $request, Response $response) {
         {
             break;
         }
+        $row['id'] = $score;
+        $data = json_decode($val, true);
 
         $r = [];
         $r['id'] = (int)$score;
         $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
-        $stmt->execute([$val[0]]);
+        $stmt->execute([$data[0]]);
         $r['user'] = $stmt->fetch();
-        $r['date'] = str_replace('-', '/', $val[2]);
-        $r['content'] = $val[1];
+        $r['date'] = str_replace('-', '/', $data[2]);
+        $r['content'] = $data[1];
         $res[] = $r;
     }
 
@@ -370,6 +372,8 @@ $app->get('/fetch', function (Request $request, Response $response) {
         $channelIds[] = (int)$row['id'];
     }
 
+    $redis = getRedisCli();
+
     $res = [];
     foreach ($channelIds as $channelId) {
         $stmt = $dbh->prepare(
@@ -381,12 +385,16 @@ $app->get('/fetch', function (Request $request, Response $response) {
         $row = $stmt->fetch();
         if ($row) {
             $lastMessageId = $row['message_id'];
-            $stmt = $dbh->prepare(
-                "SELECT COUNT(*) as cnt ".
-                "FROM message ".
-                "WHERE channel_id = ? AND ? < id"
-            );
-            $stmt->execute([$channelId, $lastMessageId]);
+            // $stmt = $dbh->prepare(
+            //     "SELECT COUNT(*) as cnt ".
+            //     "FROM message ".
+            //     "WHERE channel_id = ? AND ? < id"
+            // );
+            // $stmt->execute([$channelId, $lastMessageId]);
+            
+            // 要素数を取得、第2、第3引数で指定された範囲のscoreを持つ要素の数が返ってくる(valueは返ってこない)
+            $key = "message:".$channelId;
+            $cnt = $redis->zcount('key', 0, $lastMessageId);
         } else {
             $stmt = $dbh->prepare(
                 "SELECT COUNT(*) as cnt ".
@@ -397,7 +405,8 @@ $app->get('/fetch', function (Request $request, Response $response) {
         }
         $r = [];
         $r['channel_id'] = $channelId;
-        $r['unread'] = (int)$stmt->fetch()['cnt'];
+        //$r['unread'] = (int)$stmt->fetch()['cnt'];
+        $r['unread'] = $cnt;
         $res[] = $r;
     }
 
@@ -412,10 +421,15 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     }
     $page = (int)$page;
 
-    $dbh = getPDO();
-    $stmt = $dbh->prepare("SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?");
-    $stmt->execute([$channelId]);
-    $cnt = (int)($stmt->fetch()['cnt']);
+
+    // $dbh = getPDO();
+    // $stmt = $dbh->prepare("SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?");
+    // $stmt->execute([$channelId]);
+    // $cnt = (int)($stmt->fetch()['cnt']);
+    $redis = getRedisCli();
+    $key = "message:".$channelId;
+
+    $cnt = $redis->zcard($key);
     $pageSize = 20;
     $maxPage = ceil($cnt / $pageSize);
     if ($maxPage == 0) {
@@ -426,17 +440,26 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
         return $response->withStatus(400);
     }
 
-    $offset = ($page - 1) * $pageSize;
-    $stmt = $dbh->prepare(
-        "SELECT * ".
-        "FROM message ".
-        "WHERE channel_id = ? ORDER BY id DESC LIMIT $pageSize OFFSET $offset"
-    );
-    $stmt->execute([$channelId]);
+    // $offset = ($page - 1) * $pageSize;
+    // $stmt = $dbh->prepare(
+    //     "SELECT * ".
+    //     "FROM message ".
+    //     "WHERE channel_id = ? ORDER BY id DESC LIMIT $pageSize OFFSET $offset"
+    // );
+    // $stmt->execute([$channelId]);
+    // $rows = $stmt->fetchall();
 
-    $rows = $stmt->fetchall();
+    $result = $redis->zrange($key, ($page*20)-21, ($page*20)-1);
     $messages = [];
-    foreach ($rows as $row) {
+    foreach ($result as $val => $score) {
+
+        $row['id'] = $score;
+        $data = json_decode($val, true);
+        $row['user_id'] = $data[0];
+        $row['content'] = $data[1];
+        $row['created_at'] = $data[2];
+
+
         $r = [];
         $r['id'] = (int)$row['id'];
         $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
