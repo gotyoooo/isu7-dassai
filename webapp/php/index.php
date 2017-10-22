@@ -519,9 +519,12 @@ $app->post('/profile', function (Request $request, Response $response) {
         // $stmt->bindParam(1, $avatarName);
         // $stmt->bindParam(2, $avatarData, PDO::PARAM_LOB);
         // $stmt->execute();
-        $redis = getRedisCli();
-        $redis->set("img_" . $avatarName, $avatarData);
-        $redis->set("img_time_". $avatarName, time());
+
+        // $redis = getRedisCli();
+        // $redis->set("img_" . $avatarName, $avatarData);
+        // $redis->set("img_time_". $avatarName, time());
+
+        file_put_contents('../public/icons/'.$avatarName,$avatarData);
 
         $stmt = $pdo->prepare("UPDATE user SET avatar_icon = ? WHERE id = ?");
         $stmt->execute([$avatarName, $userId]);
