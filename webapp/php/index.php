@@ -58,12 +58,12 @@ function getRedisCli()
 function makeMessage($redis, $channelId, $timestamp, $userId, $content)
 {
     $key = 'message:'. $channelId;
-    $score = ($redis->zcard($key));
+    $score = ($redis->zcard($key)) ?? 0;
     $redis->zadd(
         $key,
         $score,
         json_encode(join([$userId, $content, $timestamp])));
-    }
+}
 
 $app = new \Slim\App();
 
@@ -112,7 +112,7 @@ $app->get('/initialize', function (Request $request, Response $response) {
     while ($row = $stmt->fetch()) {
         makeMessage(
             $redis,
-            $row['channelId'],
+            $row['channel_id'],
             strtotime($row['created_at']),
             $row['user_id'],
             $row['content']
