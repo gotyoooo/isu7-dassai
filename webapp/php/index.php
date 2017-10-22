@@ -55,6 +55,13 @@ function getRedisCli()
   return $cli;
 }
 
+function makeMessage($redis, $channelId, $timestamp, $userId, $content)
+{
+$redis->zAdd(
+    'message:'. $channelId,
+    $timestamp,
+    json_encode(join([$userId, $content])));
+}
 
 $app = new \Slim\App();
 
@@ -73,6 +80,10 @@ $container['view'] = function ($container) {
 
 $app->get('/initialize', function (Request $request, Response $response) {
 
+    $redis = getRedisCli();
+    // messageテーブルのredisデータの破棄
+    $redis->del("message:*". $image['name']);
+
     // image del
     // $redis = getRedisCli();
     // $stmt = $dbh->prepare("SELECT name FROM image WHERE id > 1001");
@@ -90,6 +101,21 @@ $app->get('/initialize', function (Request $request, Response $response) {
     $dbh->query("DELETE FROM message WHERE id > 10000");
     $dbh->query("DELETE FROM haveread");
 
+
+
+    // messageテーブルのredis化
+    // 追加、第２引数がscoreで、取得時はこの値でソートされた結果が返ってくる
+    $stmt = $dbh->prepare("SELECT channel_id, user_id, content, created_at FROM message");
+    $stmt->execute();
+    while ($row = $stmt->fetch()) {
+        makeMessage(
+            $redis,
+            $row['channelId'],
+            strtotime($row['created_at']),
+            $row['user_id'],
+            $row['content']
+        );
+    }
 
     // image
     // $redis = getRedisCli();
@@ -111,8 +137,16 @@ function db_get_user($dbh, $userId)
 
 function db_add_message($dbh, $channelId, $userId, $message)
 {
-    $stmt = $dbh->prepare("INSERT INTO message (channel_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())");
-    $stmt->execute([$channelId, $userId, $message]);
+    // $stmt = $dbh->prepare("INSERT INTO message (channel_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())");
+    // $stmt->execute([$channelId, $userId, $message]);
+    $redis = getRedisCli();
+    makeMessage(
+        $redis,
+        $channelId,
+        time(),
+        $userId,
+        $message
+    );
 }
 
 $loginRequired = function (Request $request, Response $response, $next) use ($container) {
