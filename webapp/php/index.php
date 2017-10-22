@@ -353,7 +353,8 @@ $app->get('/message', function (Request $request, Response $response) {
         $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
         $stmt->execute([$data[0]]);
         $r['user'] = $stmt->fetch();
-        $r['date'] = str_replace('-', '/', $data[2]);
+        // $r['date'] = str_replace('-', '/', $data[2]);
+        $r['date'] = date('Y-m-d H:i:s', $data[2]);
         $r['content'] = $data[1];
         $res[] = $r;
         $maxMessageId = (int)$score;
@@ -524,7 +525,8 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
         $r = [];
         $r['id'] = (int)$row['id'];
         $r['user'] = isset($users[$row['user_id']])? $users[$row['user_id']] : false;
-        $r['date'] = str_replace('-', '/', $row['created_at']);
+        // $r['date'] = str_replace('-', '/', $row['created_at']);
+        $r['date'] = date('Y-m-d H:i:s', $row['created_at']);
         $r['content'] = $row['content'];
         $messages[] = $r;
     }
