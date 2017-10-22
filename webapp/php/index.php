@@ -434,7 +434,7 @@ $app->get('/fetch', function (Request $request, Response $response) {
             //     "WHERE channel_id = ? AND ? < id"
             // );
             // $stmt->execute([$channelId, $lastMessageId]);
-            
+
             // 要素数を取得、第2、第3引数で指定された範囲のscoreを持つ要素の数が返ってくる(valueは返ってこない)
             $key = "message:".$channelId;
             $cnt = $redis->zcount('key', 0, $lastMessageId);
@@ -465,7 +465,7 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     $page = (int)$page;
 
 
-    // $dbh = getPDO();
+    $dbh = getPDO();
     // $stmt = $dbh->prepare("SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?");
     // $stmt->execute([$channelId]);
     // $cnt = (int)($stmt->fetch()['cnt']);
