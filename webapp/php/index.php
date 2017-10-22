@@ -493,12 +493,27 @@ $app->get('/icons/{filename}', function (Request $request, Response $response) {
     $ext = pathinfo($filename, PATHINFO_EXTENSION);
     $mime = ext2mime($ext);
 
+
+
+
     if ($row && $mime) {
+        $last_modified = gmdate("D, d M Y H:i:s T", strtotime($row['created_at']));
+        $etag = sha1($row['id']);
+
+        // リクエストヘッダの If-Modified-Since と If-None-Match を取得
+        $if_modified_since = filter_input( INPUT_SERVER, 'HTTP_IF_MODIFIED_SINCE' );
+        $if_none_match = filter_input( INPUT_SERVER, 'HTTP_IF_NONE_MATCH' );
+
+        // Last-modified または Etag と一致していたら 304 Not Modified ヘッダを返して終了
+        if ( $if_modified_since === $last_modified || $if_none_match === $etag ) {
+          return $response->withStatus(304);
+        }
+
         $response->write($row['data']);
         return $response
             ->withHeader('Content-type',  $mime)
-            ->withHeader('Last-Modified', gmdate("D, d M Y H:i:s T", strtotime($row['created_at'])))
-            ->withHeader('ETag', sha1($row['id']))
+            ->withHeader('Last-Modified', $last_modified)
+            ->withHeader('ETag',          $etag)
             ->withHeader('Pragma',        'cache')
             ->withHeader('Cache-Control', 'public, max-age=8640000'); // １００日キャッシュしていい
     }
