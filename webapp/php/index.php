@@ -61,7 +61,7 @@ function makeMessage($redis, $channelId, $timestamp, $userId, $content)
     $score = ($redis->zcard($key)) ?? 0;
     $redis->zadd(
         $key,
-        $score,
+        $score+1,
         json_encode((['user' => $userId, 'content' => $content, 'timestamp' => $timestamp])));
 }
 
@@ -351,11 +351,11 @@ $app->get('/message', function (Request $request, Response $response) {
         $r = [];
         $r['id'] = (int)$score;
         $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
-        $stmt->execute([$data[0]]);
+        $stmt->execute([$data['user']]);
         $r['user'] = $stmt->fetch();
         // $r['date'] = str_replace('-', '/', $data[2]);
-        $r['date'] = date('Y-m-d H:i:s', $data[2]);
-        $r['content'] = $data[1];
+        $r['date'] = date('Y-m-d H:i:s', $data['timestamp']);
+        $r['content'] = $data['content'];
         $res[] = $r;
         $maxMessageId = (int)$score;
     }
@@ -493,13 +493,16 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     // $stmt->execute([$channelId]);
     // $rows = $stmt->fetchall();
 
-    $result = $redis->zrange($key, ($page*20)-21, ($page*20)-1, ['withscores' => true]);
+    $page = $page < 1 ? 1: $page;
+    // $result = $redis->zrange($key, ($page*20)-20, ($page*20)-1, ['withscores' => true]);
+    // $result = $redis->zrevrange($key, ($page*20)-20, ($page*20)-1, ['withscores' => true]);
+    $result = $redis->zrevrange($key, ($page*20)-20, ($page*20)-1, ['withscores' => true]);
 
     $user_ids = [];
     $users = [];
     foreach ($result as $val => $score) {
         $data = json_decode($val, true);
-        $user_ids[] = $data[0];
+        $user_ids[] = $data['user'];
     }
 
     if (!empty($user_ids))
@@ -517,9 +520,9 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
 
         $row['id'] = $score;
         $data = json_decode($val, true);
-        $row['user_id'] = $data[0];
-        $row['content'] = $data[1];
-        $row['created_at'] = $data[2];
+        $row['user_id'] = $data['user'];
+        $row['content'] = $data['content'];
+        $row['created_at'] = $data['timestamp'];
 
 
         $r = [];
