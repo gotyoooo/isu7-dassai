@@ -84,7 +84,7 @@ $app->get('/initialize', function (Request $request, Response $response) {
 
     $redis = getRedisCli();
     // messageテーブルのredisデータの破棄
-    $redis->del("message:*". $image['name']);
+    $redis->flushdb();
 
     // image del
     // $redis = getRedisCli();
