@@ -221,14 +221,25 @@ $app->get('/', function (Request $request, Response $response) {
 
 function get_channel_list_info($focusedChannelId = null)
 {
-    $stmt = getPDO()->query("SELECT * FROM channel ORDER BY id");
+    if ($focusedChannelId === null)
+    {
+        $columns = 'id, name';
+    }
+    else
+    {
+        $columns = 'id, name, description';
+    }
+    $stmt = getPDO()->query('SELECT '.$columns.' FROM channel ORDER BY id');
     $channels = $stmt->fetchall();
     $description = "";
 
-    foreach ($channels as $channel) {
-        if ((int)$channel['id'] === (int)$focusedChannelId) {
-            $description = $channel['description'];
-            break;
+    if ($focusedChannelId !== null)
+    {
+        foreach ($channels as $channel) {
+            if ((int)$channel['id'] === (int)$focusedChannelId) {
+                $description = $channel['description'];
+                break;
+            }
         }
     }
     return [$channels, $description];
@@ -325,7 +336,7 @@ $app->get('/message', function (Request $request, Response $response) {
     $res = [];
     $redis = getRedisCli();
     $key = "message:".$channelId;
-    $result = $redis->zrange($key, 0, 100, true);
+    $result = $redis->zrange($key, 0, 100, ['withscore' => true]);
     foreach($redult as $val => $score)
     {
         if($score <= $lastMessageId)
@@ -348,13 +359,14 @@ $app->get('/message', function (Request $request, Response $response) {
     /**
     $dbh = getPDO();
     $stmt = $dbh->prepare(
-        "SELECT * ".
+        "SELECT id, user_id, content, created_at ".
         "FROM message ".
         "WHERE id > ? AND channel_id = ? ORDER BY id DESC LIMIT 100"
     );
     $stmt->execute([$lastMessageId, $channelId]);
     $rows = $stmt->fetchall();
-
+    $res = [];
+    $maxMessageId = 0;
     foreach ($rows as $row) {
         $r = [];
         $r['id'] = (int)$row['id'];
@@ -364,14 +376,11 @@ $app->get('/message', function (Request $request, Response $response) {
         $r['date'] = str_replace('-', '/', $row['created_at']);
         $r['content'] = $row['content'];
         $res[] = $r;
+        $maxMessageId = max($maxMessageId, $row['id']);
     }
      */
     $res = array_reverse($res);
 
-    $maxMessageId = 0;
-    foreach ($rows as $row) {
-        $maxMessageId = max($maxMessageId, $row['id']);
-    }
     $stmt = $dbh->prepare(
         "INSERT INTO haveread (user_id, channel_id, message_id, updated_at, created_at) ".
         "VALUES (?, ?, ?, NOW(), NOW()) ".
@@ -393,22 +402,27 @@ $app->get('/fetch', function (Request $request, Response $response) {
     $stmt = $dbh->query('SELECT id FROM channel');
     $rows = $stmt->fetchall();
     $channelIds = [];
-    foreach ($rows as $row) {
-        $channelIds[] = (int)$row['id'];
+    $haveread_rows = [];
+    if (!empty($rows))
+    {
+        foreach ($rows as $row) {
+            $channelIds[] = (int)$row['id'];
+        }
+        $stmt = $dbh->prepare('SELECT channel_id, message_id FROM haveread WHERE user_id = ? AND channel_id IN ('.implode(',', $channelIds).')');
+        $stmt->execute([$userId]);
+        $haveread_rows = $stmt->fetchall();
+    }
+    $havereads = [];
+    foreach ($haveread_rows as $haveread_row) {
+        $havereads[$haveread_row['channel_id']] = $haveread_row;
     }
 
     $redis = getRedisCli();
 
     $res = [];
     foreach ($channelIds as $channelId) {
-        $stmt = $dbh->prepare(
-            "SELECT * ".
-            "FROM haveread ".
-            "WHERE user_id = ? AND channel_id = ?"
-        );
-        $stmt->execute([$userId, $channelId]);
-        $row = $stmt->fetch();
-        if ($row) {
+        if (isset($havereads[$channelId])) {
+            $row = $havereads[$channelId];
             $lastMessageId = $row['message_id'];
             // $stmt = $dbh->prepare(
             //     "SELECT COUNT(*) as cnt ".
@@ -474,7 +488,25 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     // $stmt->execute([$channelId]);
     // $rows = $stmt->fetchall();
 
-    $result = $redis->zrange($key, ($page*20)-21, ($page*20)-1);
+    $result = $redis->zrange($key, ($page*20)-21, ($page*20)-1, ['withscore' => true]);
+
+    $user_ids = [];
+    $users = [];
+    foreach ($result as $val => $score) {
+        $data = json_decode($val, true);
+        $user_ids[] = $data[0];
+    }
+
+    if (!empty($user_ids))
+    {
+        $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
+        $stmt->execute([]);
+        $user_rows = $stmt->fetchall();
+        foreach ($user_rows as $urows) {
+            $users[$urows['id']] = $urows;
+        }
+    }
+
     $messages = [];
     foreach ($result as $val => $score) {
 
@@ -487,9 +519,7 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
 
         $r = [];
         $r['id'] = (int)$row['id'];
-        $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
-        $stmt->execute([$row['user_id']]);
-        $r['user'] = $stmt->fetch();
+        $r['user'] = isset($users[$row['user_id']])? $users[$row['user_id']] : false;
         $r['date'] = str_replace('-', '/', $row['created_at']);
         $r['content'] = $row['content'];
         $messages[] = $r;
@@ -514,7 +544,7 @@ $app->get('/profile/{user_name}', function (Request $request, Response $response
     $userName = $request->getAttribute('user_name');
     list($channels, $_) = get_channel_list_info();
 
-    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ?");
+    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ? LIMIT 1");
     $stmt->execute([$userName]);
     $user = $stmt->fetch();
     if (!$user) {
