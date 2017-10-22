@@ -41,6 +41,21 @@ function getPDO()
     return $pdo;
 }
 
+function getRedisCli()
+{
+  static $cli = null;
+  if (!is_null($cli)) {
+      return $cli;
+  }
+  $cli = new Predis\Client([
+    'scheme' => 'tcp',
+    'host'   => '192.168.101.3',
+    'port'   => 6379,
+  ]);
+  return $cli;
+}
+
+
 $app = new \Slim\App();
 
 $container = $app->getContainer();
@@ -57,12 +72,33 @@ $container['view'] = function ($container) {
 };
 
 $app->get('/initialize', function (Request $request, Response $response) {
+
+    // image del
+    $redis = getRedisCli();
+    // $stmt = $dbh->prepare("SELECT name FROM image WHERE id > 1001");
+    // $stmt->execute();
+    // $images= $stmt->fetchall();
+    // foreach ($images as $image) {
+    //   $redis->del("img_". $image['name']);
+    //   $redis->del("img_time_". $image['name']);
+    // }
+
     $dbh = getPDO();
     $dbh->query("DELETE FROM user WHERE id > 1000");
     $dbh->query("DELETE FROM image WHERE id > 1001");
     $dbh->query("DELETE FROM channel WHERE id > 10");
     $dbh->query("DELETE FROM message WHERE id > 10000");
     $dbh->query("DELETE FROM haveread");
+
+
+    // image
+    $redis = getRedisCli();
+    $stmt = $dbh->prepare("SELECT name, data FROM image");
+    $stmt->execute();
+    while ($row = $stmt->fetch()) {
+      $redis->set("img_". $row['name'], $row['data']);
+      $redis->set("img_time_". $row['name'], time());
+    }
     $response->withStatus(204);
 });
 
@@ -453,10 +489,14 @@ $app->post('/profile', function (Request $request, Response $response) {
     }
 
     if ($avatarName && $avatarData) {
-        $stmt = $pdo->prepare("INSERT INTO image (name, data, created_at) VALUES (?, ?, NOW())");
-        $stmt->bindParam(1, $avatarName);
-        $stmt->bindParam(2, $avatarData, PDO::PARAM_LOB);
-        $stmt->execute();
+        // $stmt = $pdo->prepare("INSERT INTO image (name, data, created_at) VALUES (?, ?, NOW())");
+        // $stmt->bindParam(1, $avatarName);
+        // $stmt->bindParam(2, $avatarData, PDO::PARAM_LOB);
+        // $stmt->execute();
+        $redis = getRedisCli();
+        $redis->set("img_" . $avatarName, $avatarData);
+        $redis->set("img_time_". $avatarName, time());
+
         $stmt = $pdo->prepare("UPDATE user SET avatar_icon = ? WHERE id = ?");
         $stmt->execute([$avatarName, $userId]);
     }
@@ -486,30 +526,43 @@ function ext2mime($ext)
 
 $app->get('/icons/{filename}', function (Request $request, Response $response) {
     $filename = $request->getAttribute('filename');
-    $stmt = getPDO()->prepare("SELECT * FROM image WHERE name = ?");
-    $stmt->execute([$filename]);
-    $row = $stmt->fetch();
+
+    $redis = getRedisCli();
+    $modified = $redis->get("img_time_" . $filename);
+
+    // $stmt = getPDO()->prepare("SELECT * FROM image WHERE name = ?");
+    // $stmt->execute([$filename]);
+    // $row = $stmt->fetch();
+    $last_modified = gmdate("D, d M Y H:i:s T", strtotime($row['created_at']));
+    $etag = sha1($row['id']);
+
+    // リクエストヘッダの If-Modified-Since と If-None-Match を取得
+    $if_modified_since = filter_input( INPUT_SERVER, 'HTTP_IF_MODIFIED_SINCE' );
+    $if_none_match = filter_input( INPUT_SERVER, 'HTTP_IF_NONE_MATCH' );
 
     $ext = pathinfo($filename, PATHINFO_EXTENSION);
     $mime = ext2mime($ext);
 
+    // Last-modified または Etag と一致していたら 304 Not Modified ヘッダを返して終了
+    if ( $if_modified_since === $last_modified || $if_none_match === $etag ) {
+      return $response->withStatus(304);
+    }
 
-
-
-    if ($row && $mime) {
-        $last_modified = gmdate("D, d M Y H:i:s T", strtotime($row['created_at']));
-        $etag = sha1($row['id']);
-
-        // リクエストヘッダの If-Modified-Since と If-None-Match を取得
-        $if_modified_since = filter_input( INPUT_SERVER, 'HTTP_IF_MODIFIED_SINCE' );
-        $if_none_match = filter_input( INPUT_SERVER, 'HTTP_IF_NONE_MATCH' );
+    // if ($row && $mime) {
+    if ($mime) {
+        // $last_modified = gmdate("D, d M Y H:i:s T", strtotime($row['created_at']));
+        // $etag = sha1($row['id']);
+        //
+        // // リクエストヘッダの If-Modified-Since と If-None-Match を取得
+        // $if_modified_since = filter_input( INPUT_SERVER, 'HTTP_IF_MODIFIED_SINCE' );
+        // $if_none_match = filter_input( INPUT_SERVER, 'HTTP_IF_NONE_MATCH' );
 
         // Last-modified または Etag と一致していたら 304 Not Modified ヘッダを返して終了
-        if ( $if_modified_since === $last_modified || $if_none_match === $etag ) {
-          return $response->withStatus(304);
-        }
-
-        $response->write($row['data']);
+        // if ( $if_modified_since === $last_modified || $if_none_match === $etag ) {
+        //   return $response->withStatus(304);
+        // }
+        $response->write($redis->get("img_" . $filename));
+        // $response->write($row['data']);
         return $response
             ->withHeader('Content-type',  $mime)
             ->withHeader('Last-Modified', $last_modified)
