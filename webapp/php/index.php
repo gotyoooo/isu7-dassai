@@ -100,7 +100,6 @@ $app->get('/initialize', function (Request $request, Response $response) {
     //   $redis->set("img_". $row['name'], $row['data']);
     //   $redis->set("img_time_". $row['name'], time());
     // }
-    $redis->
 
     $stmt = $dbh->prepare("SELECT id, name, salt, password FROM user");
     $stmt->execute();
