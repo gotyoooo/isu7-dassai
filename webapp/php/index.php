@@ -246,7 +246,7 @@ $app->post('/login', function (Request $request, Response $response) {
     // $stmt->execute([$name]);
     // $user = $stmt->fetch();
     // if (!$user || $user['password'] !== sha1(utf8_encode($user['salt'] . $password))) {
-    if (!$user || $user_pass !== sha1(utf8_encode($user_salt . $password))) {
+    if ($user_pass !== sha1(utf8_encode($user_salt . $password))) {
         return $response->withStatus(403);
     }
     $response = FigResponseCookies::set($response, SetCookie::create('user_id', $user['id']));
