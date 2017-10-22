@@ -62,7 +62,7 @@ function makeMessage($redis, $channelId, $timestamp, $userId, $content)
     $redis->zadd(
         $key,
         $score,
-        json_encode(join([$userId, $content, $timestamp])));
+        json_encode((['user' => $userId, 'content' => $content, 'timestamp' => $timestamp])));
 }
 
 $app = new \Slim\App();
