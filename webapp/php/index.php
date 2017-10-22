@@ -284,7 +284,7 @@ $app->get('/message', function (Request $request, Response $response) {
         $user_ids[] = $row['user_id'];
     }
     $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN (?)');
-    $stmt->execute([implode(',', $user_ids]);
+    $stmt->execute([implode(',', $user_ids)]);
     $user_rows = $stmt->fetchall();
     $users = [];
     foreach ($user_rows as $urows) {
