@@ -39,3 +39,8 @@ CREATE TABLE haveread (
   created_at DATETIME NOT NULL,
   PRIMARY KEY(user_id, channel_id)
 ) Engine=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- alter table image add created_at datetime default '2000/12/31 23:59:59'
+-- ALTER TABLE image ADD INDEX image_name(name);
+-- ALTER TABLE message ADD INDEX channel_id(channel_id);
+-- ALTER TABLE `user` ADD INDEX user_idx1(`name`);
