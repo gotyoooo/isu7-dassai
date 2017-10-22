@@ -158,12 +158,12 @@ function random_string($length)
 
 function register($dbh, $userName, $password)
 {
-    $salt = random_string(2);
+    $salt = random_string(20);
     $passDigest = sha1(utf8_encode($salt . $password));
-
-    $redis = getRedisCli();
-    $redis->set("user_pass_". $userName, $passDigest);
-    $redis->set("user_salt_". $userName, $salt);
+    //
+    // $redis = getRedisCli();
+    // $redis->set("user_pass_". $userName, $passDigest);
+    // $redis->set("user_salt_". $userName, $salt);
 
     $stmt = $dbh->prepare(
         "INSERT INTO user (name, salt, password, display_name, avatar_icon, created_at) ".
@@ -171,10 +171,11 @@ function register($dbh, $userName, $password)
     );
     $stmt->execute([$userName, $salt, $passDigest, $userName]);
     $stmt = $dbh->query("SELECT LAST_INSERT_ID() AS last_insert_id");
-
-    $userId = $stmt->fetch()['last_insert_id'];
-    $redis->set("user_id_". $userName, $userId);
-    return $userId;
+    //
+    // $userId = $stmt->fetch()['last_insert_id'];
+    // $redis->set("user_id_". $userName, $userId);
+    // return $userId;
+    return $stmt->fetch()['last_insert_id'];
 }
 
 $app->get('/', function (Request $request, Response $response) {
@@ -244,15 +245,15 @@ $app->post('/login', function (Request $request, Response $response) {
     $name = $request->getParam('name');
     $password = $request->getParam('password');
 
-    $redis = getRedisCli();
-    $user_pass = $redis->get("user_pass_". $name);
-    $user_salt = $redis->get("user_salt_". $name);
-    //
-    // $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ?");
-    // $stmt->execute([$name]);
-    // $user = $stmt->fetch();
-    // if (!$user || $user['password'] !== sha1(utf8_encode($user['salt'] . $password))) {
-    if ($user_pass !== sha1(utf8_encode($user_salt . $password))) {
+    // $redis = getRedisCli();
+    // $user_pass = $redis->get("user_pass_". $name);
+    // $user_salt = $redis->get("user_salt_". $name);
+
+    $stmt = getPDO()->prepare("SELECT * FROM user WHERE name = ?");
+    $stmt->execute([$name]);
+    $user = $stmt->fetch();
+    if (!$user || $user['password'] !== sha1(utf8_encode($user['salt'] . $password))) {
+    // if ($user_pass !== sha1(utf8_encode($user_salt . $password))) {
         return $response->withStatus(403);
     }
     $response = FigResponseCookies::set($response, SetCookie::create('user_id', $redis->get("user_id_". $name)));
