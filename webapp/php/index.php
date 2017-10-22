@@ -453,7 +453,7 @@ $app->post('/profile', function (Request $request, Response $response) {
     }
 
     if ($avatarName && $avatarData) {
-        $stmt = $pdo->prepare("INSERT INTO image (name, data) VALUES (?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO image (name, data, created_at) VALUES (?, ?, NOW())");
         $stmt->bindParam(1, $avatarName);
         $stmt->bindParam(2, $avatarData, PDO::PARAM_LOB);
         $stmt->execute();
@@ -495,7 +495,12 @@ $app->get('/icons/{filename}', function (Request $request, Response $response) {
 
     if ($row && $mime) {
         $response->write($row['data']);
-        return $response->withHeader('Content-type', $mime);
+        return $response
+            ->withHeader('Content-type',  $mime)
+            ->withHeader('Last-Modified', gmdate("D, d M Y H:i:s T", strtotime($row['created_at'])))
+            ->withHeader('ETag', sha1($row['id']))
+            ->withHeader('Pragma',        'cache')
+            ->withHeader('Cache-Control', 'public, max-age=8640000'); // １００日キャッシュしていい
     }
     return $response->withStatus(404);
 });
