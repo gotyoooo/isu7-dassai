@@ -57,11 +57,13 @@ function getRedisCli()
 
 function makeMessage($redis, $channelId, $timestamp, $userId, $content)
 {
-$redis->zAdd(
-    'message:'. $channelId,
-    $timestamp,
-    json_encode(join([$userId, $content])));
-}
+    $key = 'message:'. $channelId;
+    $score = $redis->zcard($key);
+    $redis->zadd(
+        $key,
+        $score,
+        json_encode(join([$userId, $content, $timestamp])));
+    }
 
 $app = new \Slim\App();
 
@@ -293,6 +295,30 @@ $app->get('/message', function (Request $request, Response $response) {
 
     $channelId = $request->getParam('channel_id');
     $lastMessageId = $request->getParam('last_message_id');
+
+
+    $res = [];
+    $redis = getRedisCli();
+    $key = "message:".$channelId;
+    $result = $redis->zrange($key, 0, 100, true);
+    foreach($redult as $val => $score)
+    {
+        if($score <= $lastMessageId)
+        {
+            break;
+        }
+
+        $r = [];
+        $r['id'] = (int)$score;
+        $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
+        $stmt->execute([$val[0]]);
+        $r['user'] = $stmt->fetch();
+        $r['date'] = str_replace('-', '/', $val[2]);
+        $r['content'] = $val[1];
+        $res[] = $r;
+    }
+
+    /**
     $dbh = getPDO();
     $stmt = $dbh->prepare(
         "SELECT * ".
@@ -301,7 +327,7 @@ $app->get('/message', function (Request $request, Response $response) {
     );
     $stmt->execute([$lastMessageId, $channelId]);
     $rows = $stmt->fetchall();
-    $res = [];
+
     foreach ($rows as $row) {
         $r = [];
         $r['id'] = (int)$row['id'];
@@ -312,6 +338,7 @@ $app->get('/message', function (Request $request, Response $response) {
         $r['content'] = $row['content'];
         $res[] = $r;
     }
+     */
     $res = array_reverse($res);
 
     $maxMessageId = 0;
