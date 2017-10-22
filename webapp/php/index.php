@@ -283,12 +283,15 @@ $app->get('/message', function (Request $request, Response $response) {
     foreach ($rows as $row) {
         $user_ids[] = $row['user_id'];
     }
-    $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
-    $stmt->execute([]);
-    $user_rows = $stmt->fetchall();
     $users = [];
-    foreach ($user_rows as $urows) {
-        $users[$urows['id']] = $urows;
+    if (!empty($user_ids))
+    {
+        $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
+        $stmt->execute([]);
+        $user_rows = $stmt->fetchall();
+        foreach ($user_rows as $urows) {
+            $users[$urows['id']] = $urows;
+        }
     }
     $maxMessageId = 0;
     foreach ($rows as $row) {
@@ -323,12 +326,16 @@ $app->get('/fetch', function (Request $request, Response $response) {
     $stmt = $dbh->query('SELECT id FROM channel');
     $rows = $stmt->fetchall();
     $channelIds = [];
-    foreach ($rows as $row) {
-        $channelIds[] = (int)$row['id'];
+    $haveread_rows = [];
+    if (!empty($rows))
+    {
+        foreach ($rows as $row) {
+            $channelIds[] = (int)$row['id'];
+        }
+        $stmt = $dbh->prepare('SELECT * FROM haveread WHERE user_id = ? AND channel_id IN ('.implode(',', $channelIds).')');
+        $stmt->execute([$userId]);
+        $haveread_rows = $stmt->fetchall();
     }
-    $stmt = $dbh->prepare('SELECT * FROM haveread WHERE user_id = ? AND channel_id IN ('.implode(',', $channelIds).')');
-    $stmt->execute([$userId]);
-    $haveread_rows = $stmt->fetchall();
     $havereads = [];
     foreach ($haveread_rows as $haveread_row) {
         $havereads[$haveread_row['channel_id']] = $haveread_row;
