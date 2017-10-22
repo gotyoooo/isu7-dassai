@@ -283,8 +283,8 @@ $app->get('/message', function (Request $request, Response $response) {
     foreach ($rows as $row) {
         $user_ids[] = $row['user_id'];
     }
-    $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN (?)');
-    $stmt->execute([implode(',', $user_ids)]);
+    $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
+    $stmt->execute([]);
     $user_rows = $stmt->fetchall();
     $users = [];
     foreach ($user_rows as $urows) {
@@ -326,8 +326,8 @@ $app->get('/fetch', function (Request $request, Response $response) {
     foreach ($rows as $row) {
         $channelIds[] = (int)$row['id'];
     }
-    $stmt = $dbh->prepare('SELECT * FROM haveread WHERE user_id = ? AND channel_id IN (?)');
-    $stmt->execute([$userId, implode(',', $channelIds)]);
+    $stmt = $dbh->prepare('SELECT * FROM haveread WHERE user_id = ? AND channel_id IN ('.implode(',', $channelIds).')');
+    $stmt->execute([$userId]);
     $haveread_rows = $stmt->fetchall();
     $havereads = [];
     foreach ($haveread_rows as $haveread_row) {
