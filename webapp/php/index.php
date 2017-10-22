@@ -100,6 +100,7 @@ $app->get('/initialize', function (Request $request, Response $response) {
     //   $redis->set("img_". $row['name'], $row['data']);
     //   $redis->set("img_time_". $row['name'], time());
     // }
+    $redis->
 
     $stmt = $dbh->prepare("SELECT id, name, salt, password FROM user");
     $stmt->execute();
@@ -157,7 +158,7 @@ function random_string($length)
 
 function register($dbh, $userName, $password)
 {
-    $salt = 'a';
+    $salt = random_string(2);
     $passDigest = sha1(utf8_encode($salt . $password));
 
     $redis = getRedisCli();
