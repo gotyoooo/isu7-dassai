@@ -74,7 +74,7 @@ $container['view'] = function ($container) {
 $app->get('/initialize', function (Request $request, Response $response) {
 
     // image del
-    $redis = getRedisCli();
+    // $redis = getRedisCli();
     // $stmt = $dbh->prepare("SELECT name FROM image WHERE id > 1001");
     // $stmt->execute();
     // $images= $stmt->fetchall();
@@ -92,13 +92,13 @@ $app->get('/initialize', function (Request $request, Response $response) {
 
 
     // image
-    $redis = getRedisCli();
-    $stmt = $dbh->prepare("SELECT name, data FROM image");
-    $stmt->execute();
-    while ($row = $stmt->fetch()) {
-      $redis->set("img_". $row['name'], $row['data']);
-      $redis->set("img_time_". $row['name'], time());
-    }
+    // $redis = getRedisCli();
+    // $stmt = $dbh->prepare("SELECT name, data FROM image");
+    // $stmt->execute();
+    // while ($row = $stmt->fetch()) {
+    //   $redis->set("img_". $row['name'], $row['data']);
+    //   $redis->set("img_time_". $row['name'], time());
+    // }
     $response->withStatus(204);
 });
 
