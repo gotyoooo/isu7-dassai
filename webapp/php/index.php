@@ -324,6 +324,7 @@ $app->post('/message', function (Request $request, Response $response) {
 });
 
 $app->get('/message', function (Request $request, Response $response) {
+    $dbh = getPDO();
     $userId = FigRequestCookies::get($request, 'user_id')->getValue();
     if (!$userId) {
         return $response->withStatus(403);
