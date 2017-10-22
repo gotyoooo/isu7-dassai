@@ -332,7 +332,7 @@ $app->get('/fetch', function (Request $request, Response $response) {
         foreach ($rows as $row) {
             $channelIds[] = (int)$row['id'];
         }
-        $stmt = $dbh->prepare('SELECT * FROM haveread WHERE user_id = ? AND channel_id IN ('.implode(',', $channelIds).')');
+        $stmt = $dbh->prepare('SELECT channel_id, message_id FROM haveread WHERE user_id = ? AND channel_id IN ('.implode(',', $channelIds).')');
         $stmt->execute([$userId]);
         $haveread_rows = $stmt->fetchall();
     }
