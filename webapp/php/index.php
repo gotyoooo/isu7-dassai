@@ -337,7 +337,7 @@ $app->get('/message', function (Request $request, Response $response) {
     $redis = getRedisCli();
     $key = "message:".$channelId;
     $result = $redis->zrange($key, 0, 100, ['withscores' => true]);
-    foreach($redult as $val => $score)
+    foreach($result as $val => $score)
     {
         if($score <= $lastMessageId)
         {
