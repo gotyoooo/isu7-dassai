@@ -160,8 +160,9 @@ function register($dbh, $userName, $password)
     $passDigest = sha1(utf8_encode($salt . $password));
 
     $redis = getRedisCli();
-    $redis->set("user_pass_". $name, $passDigest);
-    $redis->set("user_salt_". $name, $salt);
+    $redis->set("user_pass_". $userName, $passDigest);
+    $redis->set("user_salt_". $userName, $salt);
+    
     $stmt = $dbh->prepare(
         "INSERT INTO user (name, salt, password, display_name, avatar_icon, created_at) ".
         "VALUES (?, ?, ?, ?, 'default.png', NOW())"
