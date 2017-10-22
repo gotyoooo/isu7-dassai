@@ -404,20 +404,32 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
 
     $offset = ($page - 1) * $pageSize;
     $stmt = $dbh->prepare(
-        "SELECT * ".
+        "SELECT id, user_id, created_at, content ".
         "FROM message ".
         "WHERE channel_id = ? ORDER BY id DESC LIMIT $pageSize OFFSET $offset"
     );
     $stmt->execute([$channelId]);
 
     $rows = $stmt->fetchall();
+    foreach ($rows as $row) {
+        $user_ids[] = $row['user_id'];
+    }
+    $users = [];
+    if (!empty($user_ids))
+    {
+        $stmt = $dbh->prepare('SELECT name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
+        $stmt->execute([]);
+        $user_rows = $stmt->fetchall();
+        foreach ($user_rows as $urows) {
+            $users[$urows['id']] = $urows;
+        }
+    }
+
     $messages = [];
     foreach ($rows as $row) {
         $r = [];
         $r['id'] = (int)$row['id'];
-        $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
-        $stmt->execute([$row['user_id']]);
-        $r['user'] = $stmt->fetch();
+        $r['user'] = isset($users[$row['user_id']])? $users[$row['user_id']] : false;
         $r['date'] = str_replace('-', '/', $row['created_at']);
         $r['content'] = $row['content'];
         $messages[] = $r;
