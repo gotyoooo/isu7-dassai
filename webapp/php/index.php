@@ -55,6 +55,15 @@ function getRedisCli()
   return $cli;
 }
 
+function makeMessage($redis, $channelId, $timestamp, $userId, $content)
+{
+    $key = 'message:'. $channelId;
+    $score = ($redis->zcard($key)) ?? 0;
+    $redis->zadd(
+        $key,
+        $score+1,
+        json_encode((['user' => $userId, 'content' => $content, 'timestamp' => $timestamp])));
+}
 
 $app = new \Slim\App();
 
@@ -74,6 +83,9 @@ $container['view'] = function ($container) {
 $app->get('/initialize', function (Request $request, Response $response) {
 
     $redis = getRedisCli();
+    // messageテーブルのredisデータの破棄
+    $redis->flushdb();
+
     // image del
     // $redis = getRedisCli();
     // $stmt = $dbh->prepare("SELECT name FROM image WHERE id > 1001");
@@ -91,6 +103,21 @@ $app->get('/initialize', function (Request $request, Response $response) {
     $dbh->query("DELETE FROM message WHERE id > 10000");
     $dbh->query("DELETE FROM haveread");
 
+
+
+    // messageテーブルのredis化
+    // 追加、第２引数がscoreで、取得時はこの値でソートされた結果が返ってくる
+    $stmt = $dbh->prepare("SELECT channel_id, user_id, content, created_at FROM message");
+    $stmt->execute();
+    while ($row = $stmt->fetch()) {
+        makeMessage(
+            $redis,
+            $row['channel_id'],
+            strtotime($row['created_at']),
+            $row['user_id'],
+            $row['content']
+        );
+    }
 
     // image
     // $redis = getRedisCli();
@@ -120,8 +147,16 @@ function db_get_user($dbh, $userId)
 
 function db_add_message($dbh, $channelId, $userId, $message)
 {
-    $stmt = $dbh->prepare("INSERT INTO message (channel_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())");
-    $stmt->execute([$channelId, $userId, $message]);
+    // $stmt = $dbh->prepare("INSERT INTO message (channel_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())");
+    // $stmt->execute([$channelId, $userId, $message]);
+    $redis = getRedisCli();
+    makeMessage(
+        $redis,
+        $channelId,
+        time(),
+        $userId,
+        $message
+    );
 }
 
 $loginRequired = function (Request $request, Response $response, $next) use ($container) {
@@ -289,6 +324,7 @@ $app->post('/message', function (Request $request, Response $response) {
 });
 
 $app->get('/message', function (Request $request, Response $response) {
+    $dbh = getPDO();
     $userId = FigRequestCookies::get($request, 'user_id')->getValue();
     if (!$userId) {
         return $response->withStatus(403);
@@ -296,6 +332,35 @@ $app->get('/message', function (Request $request, Response $response) {
 
     $channelId = $request->getParam('channel_id');
     $lastMessageId = $request->getParam('last_message_id');
+
+
+    $res = [];
+    $redis = getRedisCli();
+    $key = "message:".$channelId;
+    $result = $redis->zrevrange($key, 0, 99, ['withscores' => true]);
+    $maxMessageId = 0;
+    foreach($result as $val => $score)
+    {
+        if($score <= $lastMessageId)
+        {
+            break;
+        }
+        $row['id'] = $score;
+        $data = json_decode($val, true);
+
+        $r = [];
+        $r['id'] = (int)$score;
+        $stmt = $dbh->prepare("SELECT name, display_name, avatar_icon FROM user WHERE id = ?");
+        $stmt->execute([$data['user']]);
+        $r['user'] = $stmt->fetch();
+        // $r['date'] = str_replace('-', '/', $data[2]);
+        $r['date'] = date('Y/m/d H:i:s', $data['timestamp']);
+        $r['content'] = $data['content'];
+        $res[] = $r;
+        $maxMessageId = (int)$score;
+    }
+
+    /**
     $dbh = getPDO();
     $stmt = $dbh->prepare(
         "SELECT id, user_id, content, created_at ".
@@ -317,8 +382,10 @@ $app->get('/message', function (Request $request, Response $response) {
         $res[] = $r;
         $maxMessageId = max($maxMessageId, $row['id']);
     }
+     */
     $res = array_reverse($res);
 
+    $dbh = getPDO();
     $stmt = $dbh->prepare(
         "INSERT INTO haveread (user_id, channel_id, message_id, updated_at, created_at) ".
         "VALUES (?, ?, ?, NOW(), NOW()) ".
@@ -355,28 +422,31 @@ $app->get('/fetch', function (Request $request, Response $response) {
         $havereads[$haveread_row['channel_id']] = $haveread_row;
     }
 
+    $redis = getRedisCli();
+
     $res = [];
     foreach ($channelIds as $channelId) {
         if (isset($havereads[$channelId])) {
             $row = $havereads[$channelId];
             $lastMessageId = $row['message_id'];
-            $stmt = $dbh->prepare(
-                "SELECT COUNT(*) as cnt ".
-                "FROM message ".
-                "WHERE channel_id = ? AND ? < id"
-            );
-            $stmt->execute([$channelId, $lastMessageId]);
+            // $stmt = $dbh->prepare(
+            //     "SELECT COUNT(*) as cnt ".
+            //     "FROM message ".
+            //     "WHERE channel_id = ? AND ? < id"
+            // );
+            // $stmt->execute([$channelId, $lastMessageId]);
+
+            // 要素数を取得、第2、第3引数で指定された範囲のscoreを持つ要素の数が返ってくる(valueは返ってこない)
+            $key = "message:".$channelId;
+            $cnt = $redis->zcard($key) - $redis->zcount($key, 0, $lastMessageId -1 );
         } else {
-            $stmt = $dbh->prepare(
-                "SELECT COUNT(*) as cnt ".
-                "FROM message ".
-                "WHERE channel_id = ?"
-            );
-            $stmt->execute([$channelId]);
+            $key = "message:".$channelId;
+            $cnt = $redis->zcard($key);
         }
         $r = [];
         $r['channel_id'] = $channelId;
-        $r['unread'] = (int)$stmt->fetch()['cnt'];
+        //$r['unread'] = (int)$stmt->fetch()['cnt'];
+        $r['unread'] = $cnt;
         $res[] = $r;
     }
 
@@ -391,10 +461,15 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     }
     $page = (int)$page;
 
+
     $dbh = getPDO();
-    $stmt = $dbh->prepare("SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?");
-    $stmt->execute([$channelId]);
-    $cnt = (int)($stmt->fetch()['cnt']);
+    // $stmt = $dbh->prepare("SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?");
+    // $stmt->execute([$channelId]);
+    // $cnt = (int)($stmt->fetch()['cnt']);
+    $redis = getRedisCli();
+    $key = "message:".$channelId;
+
+    $cnt = $redis->zcard($key);
     $pageSize = 20;
     $maxPage = ceil($cnt / $pageSize);
     if ($maxPage == 0) {
@@ -405,19 +480,27 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
         return $response->withStatus(400);
     }
 
-    $offset = ($page - 1) * $pageSize;
-    $stmt = $dbh->prepare(
-        "SELECT id, user_id, created_at, content ".
-        "FROM message ".
-        "WHERE channel_id = ? ORDER BY id DESC LIMIT $pageSize OFFSET $offset"
-    );
-    $stmt->execute([$channelId]);
+    // $offset = ($page - 1) * $pageSize;
+    // $stmt = $dbh->prepare(
+    //     "SELECT * ".
+    //     "FROM message ".
+    //     "WHERE channel_id = ? ORDER BY id DESC LIMIT $pageSize OFFSET $offset"
+    // );
+    // $stmt->execute([$channelId]);
+    // $rows = $stmt->fetchall();
 
-    $rows = $stmt->fetchall();
-    foreach ($rows as $row) {
-        $user_ids[] = $row['user_id'];
-    }
+    $page = $page < 1 ? 1: $page;
+    // $result = $redis->zrange($key, ($page*20)-20, ($page*20)-1, ['withscores' => true]);
+    // $result = $redis->zrevrange($key, ($page*20)-20, ($page*20)-1, ['withscores' => true]);
+    $result = $redis->zrevrange($key, ($page*20)-20, ($page*20)-1, ['withscores' => true]);
+
+    $user_ids = [];
     $users = [];
+    foreach ($result as $val => $score) {
+        $data = json_decode($val, true);
+        $user_ids[] = $data['user'];
+    }
+
     if (!empty($user_ids))
     {
         $stmt = $dbh->prepare('SELECT id, name, display_name, avatar_icon FROM user WHERE id IN ('.implode(',', $user_ids).')');
@@ -429,11 +512,20 @@ $app->get('/history/{channel_id}', function (Request $request, Response $respons
     }
 
     $messages = [];
-    foreach ($rows as $row) {
+    foreach ($result as $val => $score) {
+
+        $row['id'] = $score;
+        $data = json_decode($val, true);
+        $row['user_id'] = $data['user'];
+        $row['content'] = $data['content'];
+        $row['created_at'] = $data['timestamp'];
+
+
         $r = [];
         $r['id'] = (int)$row['id'];
         $r['user'] = isset($users[$row['user_id']])? $users[$row['user_id']] : false;
-        $r['date'] = str_replace('-', '/', $row['created_at']);
+        // $r['date'] = str_replace('-', '/', $row['created_at']);
+        $r['date'] = date('Y/m/d H:i:s', $row['created_at']);
         $r['content'] = $row['content'];
         $messages[] = $r;
     }
